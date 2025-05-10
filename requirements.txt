@@ -1,0 +1,9 @@
+dash
+dash-bootstrap-components
+pandas
+numpy
+scipy
+yfinance
+plotly
+copulas
+scikit-learn

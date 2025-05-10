@@ -1,4 +1,4 @@
-# Riskwise Portfolio Analyzer (V3)
+# Riskwise Portfolio Analyzer (V4)
 
 Riskwise Portfolio Analyzer is an interactive web application built with Python and Dash for constructing and analyzing the risk of equity portfolios. Users can select stocks from the S&P 500, assign weights, and then perform a comprehensive risk assessment using various quantitative finance techniques.
 
@@ -23,7 +23,7 @@ The application features a user-friendly interface with collapsible sections to 
 *   **Portfolio Construction:**
     *   Select multiple stocks from an S&P 500 list (data fetched from Wikipedia).
     *   Dynamically add selected stocks to a table.
-    *   Input percentage weights for each selected stock.
+    *   Input percentage weights for each selected stock in the table.
     *   "Add" button triggers portfolio construction and subsequent risk analysis.
 *   **Portfolio Visualization:**
     *   Interactive pie chart displaying asset allocation by weight.
@@ -34,15 +34,14 @@ The application features a user-friendly interface with collapsible sections to 
     *   **Extreme Value Theory (EVT):**
         *   Calculates VaR and ES using the Generalized Pareto Distribution (GPD) fitted to the tail of portfolio losses.
         *   Displays GPD fit parameters (shape and scale).
-        *   User-adjustable threshold quantile for GPD fitting (via a slider).
+        *   User-adjustable threshold quantile for GPD fitting (via a slider in the "Threshold" section).
     *   **Risk Concentration:** Shows the portfolio's allocation across different GICS sectors.
 *   **Advanced Risk Modeling (Right Panel):**
+    *   **Threshold:** Contains a slider to adjust the quantile for EVT analysis.
     *   **Interactive Tail Plot (EVT):** Visualizes the histogram of excess losses over the selected threshold and the fitted GPD probability density function.
     *   **Copula Modeling Simulation:**
-        *   Transforms marginals to uniform.
-        *   Fits a Gaussian copula to model the dependence structure of asset returns.
-        *   Simulates joint returns and aggregates them by portfolio weights.
-        *   Estimates VaR and ES from the simulated portfolio returns.
+        *   Displays the steps of the copula modeling process.
+        *   Shows the calculated VaR and ES from the copula simulation.
 *   **Alerts:** Provides qualitative feedback and potential warnings based on the calculated risk metrics (e.g., high concentration, significant skewness/kurtosis, comparison of different VaR models).
 *   **Data Source:** Historical stock price data is fetched using `yfinance`. S&P 500 stock list is scraped from Wikipedia.
 
@@ -88,6 +87,7 @@ The application features a user-friendly interface with collapsible sections to 
     yfinance
     plotly
     copulas
+    lxml # Often needed by pandas.read_html
     ```
     Then run:
     ```bash
@@ -105,17 +105,17 @@ The application features a user-friendly interface with collapsible sections to 
 
 3.  **Interact with the application:**
     *   **Portfolio Construction:**
-        *   Use the "Select stocks..." dropdown to choose S&P 500 stocks for your portfolio.
-        *   Selected stocks will appear in the table below.
-        *   Enter the desired percentage weight for each stock in the "Weight (%)" column of the table.
-        *   Click the "Add" button. This will normalize the weights (if they don't sum to 100%) and trigger the risk analysis.
-    *   **View Portfolio Allocation:** The pie chart on the right will update to show the asset allocation.
+        *   Use the "Select stocks..." dropdown to choose S&P 500 stocks.
+        *   Selected stocks appear in the table below.
+        *   Enter the desired percentage weight for each stock in the table's "Weight (%)" column.
+        *   Click the "Add" button. This normalizes weights (if they don't sum to 100%) and triggers the risk analysis.
+    *   **View Portfolio Allocation:** The pie chart (right panel) updates.
     *   **Explore Risk Analysis:**
-        *   The results for different risk metrics (Descriptive Stats, Parametric VaR & ES, etc.) will be populated in the collapsible sections on the left. Click on a section header to expand or collapse it.
-        *   The "Threshold" slider (under the "Threshold" collapsible section on the right) allows you to adjust the quantile used for the EVT analysis. The analysis reruns when the "Add" button is clicked after changing selections or weights.
-        *   The "Interactive Tail Plot" shows the GPD fit for EVT.
-        *   The "Copula Modeling Simulation" section on the right shows the steps involved and the resulting VaR/ES.
-    *   **Check Alerts:** The "Alerts" section at the bottom left provides qualitative feedback based on the analysis.
+        *   Results for different risk metrics populate the collapsible sections (left panel). Click headers to expand/collapse.
+        *   Adjust the EVT threshold using the slider in the "Threshold" section (right panel). Click "Add" again to re-analyze with the new threshold.
+        *   The "Interactive Tail Plot" (right panel) shows the GPD fit for EVT.
+        *   The "Copula Modeling Simulation" section (right panel) displays process steps and results.
+    *   **Check Alerts:** The "Alerts" section (bottom-left) provides qualitative feedback.
 
 ## File Structure
 

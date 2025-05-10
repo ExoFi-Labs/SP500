@@ -13,14 +13,13 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# --- Data Loading ---
+# --- Data Loading (Same as before) ---
 try:
     df_sp500_list = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
     df_sp500 = df_sp500_list[0]
     df_sp500 = df_sp500[['Symbol', 'Security', 'GICS Sector']].copy()
     df_sp500.columns = ['Ticker', 'Name', 'Sector']
     df_sp500['Ticker'] = df_sp500['Ticker'].str.replace('.', '-', regex=False)
-    # Add a combined label for dropdown
     df_sp500['label'] = df_sp500['Ticker'] + " - " + df_sp500['Name']
 except Exception as e:
     print(f"Error loading S&P 500 list: {e}. Using a placeholder.")
@@ -30,28 +29,32 @@ except Exception as e:
     df_sp500 = pd.DataFrame(data)
     df_sp500['label'] = df_sp500['Ticker'] + " - " + df_sp500['Name']
 
-# --- App Initialization ---
+# --- App Initialization (Same as before) ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP],
                 suppress_callback_exceptions=True)
 server = app.server
 
 # --- Helper Functions for Collapsible Sections ---
-def make_collapsible_section(title, content_id, collapse_id, arrow_id, header_id, start_open=True):
+def make_collapsible_section(title, content_children, section_index, start_open=True):
+    """
+    Creates a collapsible section.
+    section_index will be used to create unique dictionary IDs.
+    """
     return html.Div([
         html.Div([
             title,
-            html.Span("▲" if start_open else "▼", id=arrow_id, className="float-end", style={'cursor': 'pointer'})
-        ], id=header_id, className="collapsible-header", style={'cursor': 'pointer', 'padding': '0.5rem 0.25rem', 'borderBottom': '1px solid #ddd', 'fontWeight': 'bold', 'fontSize': '0.9rem'}),
+            html.Span("▲" if start_open else "▼", id={'type': 'arrow-generic', 'index': section_index}, className="float-end", style={'cursor': 'pointer'})
+        ], id={'type': 'header-generic', 'index': section_index}, className="collapsible-header", style={'cursor': 'pointer', 'padding': '0.5rem 0.25rem', 'borderBottom': '1px solid #ddd', 'fontWeight': 'bold', 'fontSize': '0.9rem'}),
         dbc.Collapse(
-            html.Div(id=content_id, style={'padding': '0.5rem 0.25rem', 'fontSize': '0.85rem'}),
-            id=collapse_id,
+            html.Div(children=content_children, style={'padding': '0.5rem 0.25rem', 'fontSize': '0.85rem'}),
+            id={'type': 'collapse-generic', 'index': section_index}, # This ID will be MATCHed
             is_open=start_open
         )
     ], className="mb-2")
 
 # --- App Layout ---
 app.layout = dbc.Container([
-    # 1. Header
+    # 1. Header (Same as before)
     dbc.Row([
         dbc.Col(html.H1("Riskwise Portfolio", style={'fontSize': '2rem', 'fontWeight': 'bold', 'marginBottom': '0'}), md=6),
         dbc.Col(
@@ -68,101 +71,36 @@ app.layout = dbc.Container([
         # Left Column
         dbc.Col([
             html.H4("Portfolio Construction", style={'fontSize': '1.1rem', 'marginBottom':'0.2rem'}),
-            html.Div([
-                "S&P 500",
-                html.Span("▲", className="float-end")
-            ], style={'padding': '0.5rem 0.25rem', 'border': '1px solid #ccc', 'borderRadius': '4px', 'marginBottom': '10px', 'fontSize': '0.9rem', 'background': '#f8f9fa'}),
-            
-            dcc.Dropdown(
-                id='asset-selector',
-                options=[{'label': row['label'], 'value': row['Ticker']}
-                         for _, row in df_sp500.sort_values('Ticker').iterrows()],
-                multi=True,
-                placeholder="Select stocks...",
-                className="mb-2"
-            ),
+            html.Div([ "S&P 500", html.Span("▲", className="float-end") ], style={'padding': '0.5rem 0.25rem', 'border': '1px solid #ccc', 'borderRadius': '4px', 'marginBottom': '10px', 'fontSize': '0.9rem', 'background': '#f8f9fa'}),
+            dcc.Dropdown( id='asset-selector', options=[{'label': row['label'], 'value': row['Ticker']} for _, row in df_sp500.sort_values('Ticker').iterrows()], multi=True, placeholder="Select stocks...", className="mb-2"),
             dbc.Button("Add", id='add-analyze-button', color="secondary", size="sm", className="mb-2 w-100"),
-
-            html.Div([
-                dbc.Table([
-                    html.Thead(html.Tr([
-                        html.Th("Stock", style={'fontSize': '0.85rem'}),
-                        html.Th("Weight (%)", style={'fontSize': '0.85rem', 'width':'100px'}),
-                        html.Th("Sector", style={'fontSize': '0.85rem'})
-                    ])),
-                    html.Tbody(id='portfolio-table-body')
-                ], bordered=True, striped=True, hover=True, size="sm")
-            ], id='portfolio-table-container', className="mb-3", style={'maxHeight': '200px', 'overflowY': 'auto'}),
-
+            html.Div([ dbc.Table([ html.Thead(html.Tr([ html.Th("Stock", style={'fontSize': '0.85rem'}), html.Th("Weight (%)", style={'fontSize': '0.85rem', 'width':'100px'}), html.Th("Sector", style={'fontSize': '0.85rem'}) ])), html.Tbody(id='portfolio-table-body') ], bordered=True, striped=True, hover=True, size="sm") ], id='portfolio-table-container', className="mb-3", style={'maxHeight': '200px', 'overflowY': 'auto'}),
             html.H4("Risk Analysis", style={'fontSize': '1.1rem', 'marginTop': '20px'}),
-            make_collapsible_section("Descriptive Stats",
-                                     {'type': 'content', 'index': 'desc-stats'},
-                                     {'type': 'collapse', 'index': 'desc-stats'},
-                                     {'type': 'arrow', 'index': 'desc-stats'},
-                                     {'type': 'header', 'index': 'desc-stats'}),
-            make_collapsible_section("Parametric VaR & ES",
-                                     {'type': 'content', 'index': 'param-var'},
-                                     {'type': 'collapse', 'index': 'param-var'},
-                                     {'type': 'arrow', 'index': 'param-var'},
-                                     {'type': 'header', 'index': 'param-var'}),
-            make_collapsible_section("Historical VaR & ES",
-                                     {'type': 'content', 'index': 'hist-var'},
-                                     {'type': 'collapse', 'index': 'hist-var'},
-                                     {'type': 'arrow', 'index': 'hist-var'},
-                                     {'type': 'header', 'index': 'hist-var'}),
-            make_collapsible_section("EVT",
-                                     {'type': 'content', 'index': 'evt'},
-                                     {'type': 'collapse', 'index': 'evt'},
-                                     {'type': 'arrow', 'index': 'evt'},
-                                     {'type': 'header', 'index': 'evt'}),
-            html.Div(id='evt-charts-placeholder', style={'display':'none'}), # Placeholder from original image, hidden
-            make_collapsible_section("Risk Concentration",
-                                     {'type': 'content', 'index': 'risk-conc'},
-                                     {'type': 'collapse', 'index': 'risk-conc'},
-                                     {'type': 'arrow', 'index': 'risk-conc'},
-                                     {'type': 'header', 'index': 'risk-conc'}),
-            html.Div([
-                 html.H5("Alerts", style={'fontSize': '1rem', 'borderBottom': '1px solid #eee', 'paddingBottom':'0.2rem'}),
-                 html.Div(id="alerts-content", style={'padding': '0.5rem 0', 'fontSize': '0.85rem'})
-            ], className="mt-3")
-
+            
+            make_collapsible_section("Descriptive Stats", html.Div(id='content-desc-stats'), 'desc-stats'),
+            make_collapsible_section("Parametric VaR & ES", html.Div(id='content-param-var'), 'param-var'),
+            make_collapsible_section("Historical VaR & ES", html.Div(id='content-hist-var'), 'hist-var'),
+            make_collapsible_section("EVT", html.Div(id='content-evt'), 'evt'),
+            html.Div(id='evt-charts-placeholder', style={'display':'none'}),
+            make_collapsible_section("Risk Concentration", html.Div(id='content-risk-conc'), 'risk-conc'),
+            
+            html.Div([ html.H5("Alerts", style={'fontSize': '1rem', 'borderBottom': '1px solid #eee', 'paddingBottom':'0.2rem'}), html.Div(id="alerts-content", style={'padding': '0.5rem 0', 'fontSize': '0.85rem'}) ], className="mt-3")
         ], md=6),
 
         # Right Column
         dbc.Col([
             html.H4("Portfolio Visualization", style={'fontSize': '1.1rem'}),
             dcc.Graph(id='pie-chart', config={'displayModeBar': False}, style={'height': '300px'}),
-
-            make_collapsible_section("Threshold",
-                                     {'type': 'content', 'index': 'threshold'},
-                                     {'type': 'collapse', 'index': 'threshold'},
-                                     {'type': 'arrow', 'index': 'threshold'},
-                                     {'type': 'header', 'index': 'threshold'}),
-            make_collapsible_section("Interactive Tail Plot",
-                                     {'type': 'content', 'index': 'tail-plot'},
-                                     {'type': 'collapse', 'index': 'tail-plot'},
-                                     {'type': 'arrow', 'index': 'tail-plot'},
-                                     {'type': 'header', 'index': 'tail-plot'}),
-            # Updated Copula Modeling Simulation section to be static
+            
+            make_collapsible_section("Threshold", 
+                                     dcc.Slider(id='evt-threshold-slider', min=0.85, max=0.99, step=0.01, value=0.95, marks={i/100: {'label': str(i/100), 'style': {'fontSize':'0.7rem'}} for i in range(85, 100, 2)}, tooltip={"placement": "bottom", "always_visible": False}),
+                                     'threshold'),
+            make_collapsible_section("Interactive Tail Plot", html.Div(id='content-tail-plot'), 'tail-plot'),
+            
+            # Copula Section - keeping its unique ID structure for now, handled by a separate callback
             html.Div([
-                html.Div([
-                    "Copula Modeling Simulation",
-                    html.Span("▲", id={'type': 'arrow', 'index': 'copula-section'}, className="float-end", style={'cursor': 'pointer'})
-                ], id={'type': 'header', 'index': 'copula-section'}, className="collapsible-header", style={'cursor': 'pointer', 'padding': '0.5rem 0.25rem', 'borderBottom': '1px solid #ddd', 'fontWeight': 'bold', 'fontSize': '0.9rem'}),
-                dbc.Collapse(
-                    html.Div([ # Content area for copula section
-                        html.Ul([
-                            html.Li("Transform marginals to uniform"),
-                            html.Li("Fit Gaussian or Student-t copula (Current: Gaussian)"),
-                            html.Li("Simulate joint returns"),
-                            html.Li("Aggregate returns by portfolio weights"),
-                            html.Li("Estimate VaR / ES from simulated results")
-                        ], style={'paddingLeft': '20px', 'margin':0, 'fontSize': '0.85rem'}),
-                        html.Div(id="copula-results-display", className="mt-2", style={'fontSize': '0.85rem'}) # Target for dynamic VaR/ES results
-                    ], style={'padding': '0.5rem 0.25rem'}),
-                    id={'type': 'collapse', 'index': 'copula-section'},
-                    is_open=True
-                )
+                html.Div([ "Copula Modeling Simulation", html.Span("▲", id='arrow-copula-section', className="float-end", style={'cursor': 'pointer'}) ], id='header-copula-section', className="collapsible-header", style={'cursor': 'pointer', 'padding': '0.5rem 0.25rem', 'borderBottom': '1px solid #ddd', 'fontWeight': 'bold', 'fontSize': '0.9rem'}),
+                dbc.Collapse( html.Div([ html.Ul([ html.Li("Transform marginals to uniform"), html.Li("Fit Gaussian or Student-t copula (Current: Gaussian)"), html.Li("Simulate joint returns"), html.Li("Aggregate returns by portfolio weights"), html.Li("Estimate VaR / ES from simulated results") ], style={'paddingLeft': '20px', 'margin':0, 'fontSize': '0.85rem'}), html.Div(id="copula-results-display", className="mt-2", style={'fontSize': '0.85rem'}) ], style={'padding': '0.5rem 0.25rem'}), id='collapse-copula-section', is_open=True )
             ], className="mb-2"),
         ], md=6),
     ]),
@@ -237,7 +175,13 @@ def calculate_evt_risk(portfolio_returns, threshold_quantile, conf_level=0.95):
     if len(portfolio_returns) < 50:
         return np.nan, np.nan, None, pd.Series(dtype=float), "Insufficient data for EVT (min 50 days)."
     losses = -portfolio_returns 
-    threshold_val_loss = losses.quantile(threshold_quantile) 
+    if losses.empty or threshold_quantile is None:
+        return np.nan, np.nan, None, pd.Series(dtype=float), "Losses series is empty or threshold is None."
+    try: # Added try-except for quantile calculation
+        threshold_val_loss = losses.quantile(threshold_quantile) 
+    except Exception as e:
+        return np.nan, np.nan, None, pd.Series(dtype=float), f"Error calculating quantile for EVT: {e}"
+
     excesses = losses[losses > threshold_val_loss] - threshold_val_loss
     if len(excesses) < 20:
         return np.nan, np.nan, None, excesses, f"Insufficient excesses ({len(excesses)}) for GPD fit at {threshold_quantile*100:.0f}th percentile of losses. Try lower threshold."
@@ -264,7 +208,7 @@ def calculate_copula_risk(asset_returns, weights, n_simulations=1000, conf_level
     if len(weights) != asset_returns.shape[1]:
         return np.nan, np.nan, "Mismatch between number of assets and weights for copula."
     u_empirical = asset_returns.rank(axis=0, pct=True)
-    copula_model = GaussianMultivariate() # Renamed to avoid conflict with 'copula' module
+    copula_model = GaussianMultivariate() 
     try:
         copula_model.fit(u_empirical.to_numpy()) 
         sim_uniform = copula_model.sample(n_simulations) 
@@ -329,7 +273,7 @@ def generate_feedback_messages(results, sector_allocations_df):
 
 def plot_tail_distribution_graph_new(losses, threshold_val_loss, excesses, gpd_params):
     fig = go.Figure()
-    if excesses is not None and len(excesses) > 0 and gpd_params is not None:
+    if excesses is not None and len(excesses) > 0 and gpd_params is not None and not np.isnan(threshold_val_loss):
         shape_gpd, _, scale_gpd = gpd_params 
         fig.add_trace(go.Histogram(x=excesses, name='Excess Losses over Threshold', nbinsx=30, histnorm='probability density'))
         x_gpd = np.linspace(excesses.min(), excesses.max(), 200)
@@ -356,33 +300,38 @@ def plot_tail_distribution_graph_new(losses, threshold_val_loss, excesses, gpd_p
     prevent_initial_call=True 
 )
 def generate_portfolio_table_rows(selected_tickers):
-    if not selected_tickers:
-        return []
+    if not selected_tickers: return []
     rows = []
     selected_df = df_sp500[df_sp500['Ticker'].isin(selected_tickers)].set_index('Ticker')
     for ticker in selected_tickers:
         sector = selected_df.loc[ticker, 'Sector'] if ticker in selected_df.index else "N/A"
-        row = html.Tr([
-            html.Td(ticker),
-            html.Td(dcc.Input(
-                id={'type': 'weight-input', 'index': ticker},
-                type='number', min=0, max=100, step=1, placeholder="e.g. 25",
-                className="form-control form-control-sm",
-                style={'width': '70px', 'padding': '0.2rem 0.4rem', 'fontSize': '0.8rem', 'textAlign':'right'}
-            )),
-            html.Td(sector)
-        ], key=ticker)
-        rows.append(row)
+        rows.append(html.Tr([ html.Td(ticker), html.Td(dcc.Input( id={'type': 'weight-input', 'index': ticker}, type='number', min=0, max=100, step=1, placeholder="e.g. 25", className="form-control form-control-sm", style={'width': '70px', 'padding': '0.2rem 0.4rem', 'fontSize': '0.8rem', 'textAlign':'right'})), html.Td(sector) ], key=ticker))
     return rows
 
+# UPDATED Callback for toggling generic collapsible sections using dictionary IDs
 @app.callback(
-    [Output({'type': 'collapse', 'index': MATCH}, 'is_open'),
-     Output({'type': 'arrow', 'index': MATCH}, 'children')],
-    [Input({'type': 'header', 'index': MATCH}, 'n_clicks')],
-    [State({'type': 'collapse', 'index': MATCH}, 'is_open')],
+    [Output({'type': 'collapse-generic', 'index': MATCH}, 'is_open'),
+     Output({'type': 'arrow-generic', 'index': MATCH}, 'children')],
+    [Input({'type': 'header-generic', 'index': MATCH}, 'n_clicks')],
+    [State({'type': 'collapse-generic', 'index': MATCH}, 'is_open')],
     prevent_initial_call=True
 )
-def toggle_section_collapse(n_clicks, is_open):
+def toggle_generic_section_collapse(n_clicks, is_open):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    new_is_open = not is_open
+    arrow = "▲" if new_is_open else "▼"
+    return new_is_open, arrow
+
+# Specific callback for Copula section (remains the same if its ID structure is different)
+@app.callback(
+    [Output('collapse-copula-section', 'is_open'),
+     Output('arrow-copula-section', 'children')],
+    [Input('header-copula-section', 'n_clicks')],
+    [State('collapse-copula-section', 'is_open')],
+    prevent_initial_call=True
+)
+def toggle_copula_section_collapse(n_clicks, is_open):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
     new_is_open = not is_open
@@ -390,27 +339,16 @@ def toggle_section_collapse(n_clicks, is_open):
     return new_is_open, arrow
 
 @app.callback(
-    Output({'type': 'content', 'index': 'threshold'}, 'children'),
-    Input('placeholder-output', 'children') 
-)
-def populate_threshold_content(_):
-    return dcc.Slider(id='evt-threshold-slider', min=0.85, max=0.99, step=0.01, value=0.95,
-                       marks={i/100: {'label': str(i/100), 'style': {'fontSize':'0.7rem'}} for i in range(85, 100, 2)},
-                       tooltip={"placement": "bottom", "always_visible": False})
-
-# populate_copula_content callback removed as its content is now static in the layout.
-
-@app.callback(
     [Output('analysis-results-store', 'data'),
      Output('pie-chart', 'figure'),
-     Output({'type': 'content', 'index': 'desc-stats'}, 'children'),
-     Output({'type': 'content', 'index': 'param-var'}, 'children'),
-     Output({'type': 'content', 'index': 'hist-var'}, 'children'),
-     Output({'type': 'content', 'index': 'evt'}, 'children'),
-     Output({'type': 'content', 'index': 'risk-conc'}, 'children'),
+     Output('content-desc-stats', 'children'), 
+     Output('content-param-var', 'children'),
+     Output('content-hist-var', 'children'),
+     Output('content-evt', 'children'),
+     Output('content-risk-conc', 'children'),
      Output('alerts-content', 'children'),
-     Output({'type': 'content', 'index': 'tail-plot'}, 'children'),
-     Output('copula-results-display', 'children') # Targets the static div
+     Output('content-tail-plot', 'children'), 
+     Output('copula-results-display', 'children')
      ],
     [Input('add-analyze-button', 'n_clicks')],
     [State('asset-selector', 'value'),
@@ -421,37 +359,32 @@ def populate_threshold_content(_):
 def master_run_analysis(n_clicks, selected_tickers_list, weight_values_list, weight_ids_list, evt_threshold_quantile):
     ctx = dash.callback_context
     if not ctx.triggered or n_clicks is None or not selected_tickers_list:
-        empty_pie_fig = go.Figure()
-        empty_pie_fig.update_layout(title_text=None, margin=dict(l=20, r=20, t=10, b=10), font=dict(size=10), height=300)
-        
+        empty_pie_fig = go.Figure().update_layout(title_text=None, margin=dict(l=20, r=20, t=10, b=10), font=dict(size=10), height=300)
         no_data_msg = "Select assets, enter weights (ensure sum > 0), and click 'Add'."
         no_data_html = html.P(no_data_msg, style={'textAlign': 'center', 'color': 'grey'})
-
-        empty_tail_plot_fig = go.Figure().update_layout(title_text="Interactive Tail Plot", margin=dict(l=20, r=20, t=40, b=20), font=dict(size=10), height=280)
-        empty_tail_plot_graph_component = dcc.Graph(figure=empty_tail_plot_fig, config={'displayModeBar': False})
-
+        empty_tail_plot_graph_component = dcc.Graph(figure=go.Figure().update_layout(title_text="Interactive Tail Plot", margin=dict(l=20, r=20, t=40, b=20), font=dict(size=10), height=280), config={'displayModeBar': False})
         alerts_initial_msg = html.Ul([html.Li("No analysis run yet.")]) if not ctx.triggered else ""
+        return (dash.no_update, empty_pie_fig, no_data_html, no_data_html, no_data_html, no_data_html, no_data_html, alerts_initial_msg, empty_tail_plot_graph_component, "")
 
-        return (
-            dash.no_update, empty_pie_fig, no_data_html, no_data_html, no_data_html, 
-            no_data_html, no_data_html, alerts_initial_msg, 
-            empty_tail_plot_graph_component, ""  # Initial empty for copula results
-        )
+    if evt_threshold_quantile is None:
+        error_msg = "EVT threshold slider value is missing. Please ensure it's in the layout."
+        err_html = html.Ul([html.Li(error_msg)])
+        empty_pie_fig = go.Figure().update_layout(title_text=None, margin=dict(l=20, r=20, t=10, b=10), font=dict(size=10), height=300)
+        empty_tail_plot_graph_component = dcc.Graph(figure=go.Figure().update_layout(title_text="Interactive Tail Plot", margin=dict(l=20, r=20, t=40, b=20), font=dict(size=10), height=280), config={'displayModeBar': False})
+        return (dash.no_update, empty_pie_fig, err_html, err_html, err_html, err_html, err_html, err_html, empty_tail_plot_graph_component, "")
 
     valid_tickers_weights = []
     temp_weights_dict = {comp_id['index']: val for comp_id, val in zip(weight_ids_list, weight_values_list)}
-
     for ticker in selected_tickers_list:
         weight_val = temp_weights_dict.get(ticker)
         if weight_val is not None:
             try:
                 w_pct = float(weight_val)
-                if w_pct < 0:
-                    error_msg = f"Weight for {ticker} cannot be negative."
-                    err_html = html.Ul([html.Li(error_msg)])
-                    return (None, dash.no_update, err_html, err_html, err_html, err_html, err_html, err_html, dash.no_update, "")
-                if w_pct > 0:
-                    valid_tickers_weights.append((ticker, w_pct / 100.0))
+                if w_pct < 0: error_msg = f"Weight for {ticker} cannot be negative."
+                elif w_pct > 0: valid_tickers_weights.append((ticker, w_pct / 100.0)); continue
+                else: continue # Weight is 0, skip
+                err_html = html.Ul([html.Li(error_msg)])
+                return (None, dash.no_update, err_html, err_html, err_html, err_html, err_html, err_html, dash.no_update, "")
             except ValueError:
                 error_msg = f"Invalid weight for {ticker}. Please enter a number."
                 err_html = html.Ul([html.Li(error_msg)])
@@ -465,12 +398,10 @@ def master_run_analysis(n_clicks, selected_tickers_list, weight_values_list, wei
     tickers_final = [item[0] for item in valid_tickers_weights]
     weights_final_raw = np.array([item[1] for item in valid_tickers_weights], dtype=float)
     total_weight_sum = weights_final_raw.sum()
-
     if total_weight_sum == 0:
         error_msg = "Sum of weights cannot be zero. Please ensure weights are positive."
         err_html = html.Ul([html.Li(error_msg)])
         return (None, dash.no_update, err_html, err_html, err_html, err_html, err_html, err_html, dash.no_update, "")
-        
     weights_final = weights_final_raw / total_weight_sum
 
     asset_returns_df, _, data_error_msg = get_portfolio_data(tickers_final)
@@ -504,50 +435,29 @@ def master_run_analysis(n_clicks, selected_tickers_list, weight_values_list, wei
     pie_fig.update_layout(margin=dict(l=20, r=20, t=10, b=10), font=dict(size=10), height=300, showlegend=True, legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
     pie_fig.update_traces(textposition='inside', textinfo='percent+label', insidetextorientation='radial')
 
-    desc_stats_content = html.Ul([
-        html.Li(f"Mean Daily Return: {results_dict.get('mu', np.nan):.4%}"),
-        html.Li(f"Daily Volatility: {results_dict.get('sigma', np.nan):.4%}"),
-        html.Li(f"Skewness: {results_dict.get('skewness', np.nan):.4f}"),
-        html.Li(f"Kurtosis (Fisher): {results_dict.get('kurtosis', np.nan):.4f}"),
-        html.Li(f"Data points: {len(portfolio_returns_series)}")
-    ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
-    param_var_content = html.Ul([
-        html.Li(f"VaR (95%): {results_dict.get('var_parametric', np.nan):.4%}"),
-        html.Li(f"ES (95%): {results_dict.get('es_parametric', np.nan):.4%}"),
-    ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
-    hist_var_content = html.Ul([
-        html.Li(f"VaR (95%): {results_dict.get('var_historical', np.nan):.4%}"),
-        html.Li(f"ES (95%): {results_dict.get('es_historical', np.nan):.4%}"),
-    ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
-    evt_content_list = [
-        html.Li(f"VaR (95%): {results_dict.get('evt_var', np.nan):.4%}"),
-        html.Li(f"ES (95%): {results_dict.get('evt_es', np.nan):.4%}"),
-    ]
+    desc_stats_content = html.Ul([ html.Li(f"Mean Daily Return: {results_dict.get('mu', np.nan):.4%}"), html.Li(f"Daily Volatility: {results_dict.get('sigma', np.nan):.4%}"), html.Li(f"Skewness: {results_dict.get('skewness', np.nan):.4f}"), html.Li(f"Kurtosis (Fisher): {results_dict.get('kurtosis', np.nan):.4f}"), html.Li(f"Data points: {len(portfolio_returns_series)}") ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
+    param_var_content = html.Ul([ html.Li(f"VaR (95%): {results_dict.get('var_parametric', np.nan):.4%}"), html.Li(f"ES (95%): {results_dict.get('es_parametric', np.nan):.4%}"), ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
+    hist_var_content = html.Ul([ html.Li(f"VaR (95%): {results_dict.get('var_historical', np.nan):.4%}"), html.Li(f"ES (95%): {results_dict.get('es_historical', np.nan):.4%}"), ], style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
+    evt_content_list = [ html.Li(f"VaR (95%): {results_dict.get('evt_var', np.nan):.4%}"), html.Li(f"ES (95%): {results_dict.get('evt_es', np.nan):.4%}"), ]
     if 'evt_error' in results_dict: evt_content_list.append(html.Li(f"Note: {results_dict['evt_error']}", style={'color':'orange'}))
-    if results_dict.get('gpd_params'):
-        evt_content_list.append(html.Li(f"GPD Shape (ξ): {results_dict['gpd_params'][0]:.3f}"))
-        evt_content_list.append(html.Li(f"GPD Scale (σ): {results_dict['gpd_params'][2]:.4f}"))
+    if results_dict.get('gpd_params'): evt_content_list.extend([html.Li(f"GPD Shape (ξ): {results_dict['gpd_params'][0]:.3f}"), html.Li(f"GPD Scale (σ): {results_dict['gpd_params'][2]:.4f}")])
     evt_content = html.Ul(evt_content_list, style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
     
     losses_series = -portfolio_returns_series
-    evt_threshold_val_loss = losses_series.quantile(evt_threshold_quantile) if not losses_series.empty else np.nan
+    evt_threshold_val_loss = losses_series.quantile(evt_threshold_quantile) if not losses_series.empty and evt_threshold_quantile is not None else np.nan
     tail_plot_fig = plot_tail_distribution_graph_new(losses_series, evt_threshold_val_loss, excesses_for_plot, results_dict.get('gpd_params'))
     tail_plot_content = dcc.Graph(figure=tail_plot_fig, config={'displayModeBar': False})
 
     risk_conc_content_list = [html.Li(f"{row['Sector']}: {row['Weight (%)']:.2f}%") for _, row in sector_allocations_df.iterrows()]
     risk_conc_content = html.Ul(risk_conc_content_list, style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0})
 
-    copula_results_list = [
-        html.Li(f"VaR (95%): {results_dict.get('copula_var', np.nan):.4%}"),
-        html.Li(f"ES (95%): {results_dict.get('copula_es', np.nan):.4%}"),
-    ]
+    copula_results_list = [ html.Li(f"VaR (95%): {results_dict.get('copula_var', np.nan):.4%}"), html.Li(f"ES (95%): {results_dict.get('copula_es', np.nan):.4%}"), ]
     if 'copula_error' in results_dict: copula_results_list.append(html.Li(f"Note: {results_dict['copula_error']}", style={'color':'orange'}))
     copula_results_text = html.Ul(copula_results_list, style={'listStyleType': 'none', 'paddingLeft': '0', 'margin':0, 'marginTop':'5px', 'borderTop':'1px solid #eee', 'paddingTop':'5px'})
     
     feedback_html = generate_feedback_messages(results_dict, sector_allocations_df)
     
-    return (results_dict, pie_fig, desc_stats_content, param_var_content, hist_var_content, 
-            evt_content, risk_conc_content, feedback_html, tail_plot_content, copula_results_text)
+    return (results_dict, pie_fig, desc_stats_content, param_var_content, hist_var_content, evt_content, risk_conc_content, feedback_html, tail_plot_content, copula_results_text)
 
 # --- Run App ---
 if __name__ == '__main__':
